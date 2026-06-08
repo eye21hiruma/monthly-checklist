@@ -328,11 +328,9 @@
       <button class="btn-save" id="saveBtn">保存する</button>
     </div>
     <div class="backup-area">
-      <div class="backup-title">📦 データの引き継ぎ</div>
-      <p class="backup-desc">スマホ・パソコンなど別の端末へ設定とチェックを移せます。「書き出し」で保存したファイルを、移したい端末で「読み込み」してください。</p>
-      <button class="btn-backup" id="exportBtn">💾 書き出し（バックアップ保存）</button>
-      <button class="btn-backup" id="importBtn">📂 読み込み（復元）</button>
-      <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+      <div class="backup-title">🔄 変更を全端末に反映</div>
+      <p class="backup-desc">項目を追加・変更したら、このボタンで「data.json」を書き出して送ってください。反映後は、スマホもパソコンも開くだけで自動的に最新の項目になります（読み込み操作は不要です）。</p>
+      <button class="btn-backup" id="updateBtn">🔄 更新（変更を書き出す）</button>
     </div>
   </div>
 </div>
@@ -625,62 +623,58 @@ document.getElementById("overlay").addEventListener("click", e => {
   if (e.target === document.getElementById("overlay")) closeSetting();
 });
 
-// ===== バックアップ（書き出し・読み込み） =====
-function exportData() {
-  const data = {};
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.indexOf("副業") === 0) data[k] = localStorage.getItem(k);
+// ===== 自動同期（開くたびに最新を読み込む） =====
+const MASTER_VER_KEY = "副業マスター版数";
+
+async function syncFromServer() {
+  try {
+    const res = await fetch("data.json?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data || !Array.isArray(data.tasks)) return;
+    const localVer = parseInt(localStorage.getItem(MASTER_VER_KEY) || "0", 10);
+    const serverVer = data.version || 0;
+    // サーバー側が新しいときだけ自動で取り込む
+    if (serverVer > localVer) {
+      saveTasks(data.tasks);
+      localStorage.setItem(MASTER_VER_KEY, String(serverVer));
+      render();
+    }
+  } catch (e) {
+    // オフラインなどは無視（手元のデータで表示を続ける）
   }
-  if (Object.keys(data).length === 0) {
-    alert("保存するデータがまだありません。");
+}
+
+// ===== 更新（変更を書き出して全端末に反映依頼） =====
+function publishUpdate() {
+  const tasks = loadTasks();
+  if (tasks.length === 0) {
+    alert("項目がありません。先に項目を追加してください。");
     return;
   }
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const version = Date.now();
+  const payload = { version: version, tasks: tasks };
+  // この端末を最新扱いにする（自分の変更が上書きされないように）
+  saveTasks(tasks);
+  localStorage.setItem(MASTER_VER_KEY, String(version));
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  const d = new Date();
-  const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   a.href = url;
-  a.download = `副業管理バックアップ_${stamp}.json`;
+  a.download = "data.json";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+
+  alert("「data.json」を書き出しました。\nこのファイルを送って反映を依頼してください。\n反映後は、どの端末も開くだけで自動的に最新になります。");
 }
 
-function importData(file) {
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const data = JSON.parse(e.target.result);
-      const keys = Object.keys(data).filter(k => k.indexOf("副業") === 0);
-      if (keys.length === 0) {
-        alert("このファイルには引き継ぎできるデータが見つかりませんでした。");
-        return;
-      }
-      if (!confirm(`${keys.length}件のデータを読み込みます。\n今この端末にあるデータは上書きされます。よろしいですか？`)) return;
-      keys.forEach(k => localStorage.setItem(k, data[k]));
-      alert("読み込みが完了しました！");
-      closeSetting();
-      render();
-    } catch (err) {
-      alert("ファイルを読み込めませんでした。正しいバックアップファイルか確認してください。");
-    }
-  };
-  reader.readAsText(file);
-}
-
-document.getElementById("exportBtn").addEventListener("click", exportData);
-document.getElementById("importBtn").addEventListener("click", () => {
-  document.getElementById("importFile").click();
-});
-document.getElementById("importFile").addEventListener("change", e => {
-  if (e.target.files && e.target.files[0]) importData(e.target.files[0]);
-  e.target.value = "";
-});
+document.getElementById("updateBtn").addEventListener("click", publishUpdate);
 
 render();
+syncFromServer();
 </script>
 </body>
 </html>
