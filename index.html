@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="副業チェックリスト">
+<title>副業管理チェックリスト</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'Hiragino Kochi Pro', 'ヒラギノ丸ゴ Pro', 'Yu Gothic', sans-serif;
+    background: #fdf6f0;
+    color: #4a3728;
+    min-height: 100vh;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+
+  /* ヘッダー */
+  header {
+    background: linear-gradient(135deg, #c9957a 0%, #e8b99a 100%);
+    color: white;
+    text-align: center;
+    padding: 22px 20px 16px;
+    padding-top: calc(22px + env(safe-area-inset-top));
+  }
+  header h1 { font-size: 1.3rem; letter-spacing: 0.08em; }
+
+  /* 月ナビ（固定） */
+  .month-nav {
+    position: sticky; top: 0; z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: #fff8f3;
+    border-bottom: 1px solid #f0ddd0;
+    box-shadow: 0 1px 6px rgba(180,120,90,0.12);
+  }
+  .month-nav .nav-side {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .month-nav button {
+    background: #c9957a; color: white; border: none;
+    border-radius: 50%; width: 40px; height: 40px;
+    font-size: 1.2rem; cursor: pointer;
+    touch-action: manipulation;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .month-nav button:active { background: #9a6a50; }
+  .month-label {
+    font-size: 1.2rem; font-weight: bold;
+    min-width: 110px; text-align: center;
+    user-select: none;
+  }
+  .btn-setting {
+    background: none; border: 1px solid #d0a080;
+    color: #8a5c3a; padding: 7px 12px;
+    border-radius: 20px; font-size: 1.1rem;
+    cursor: pointer; touch-action: manipulation;
+    white-space: nowrap; line-height: 1;
+  }
+  .btn-setting:active { background: #fff0e8; }
+
+  /* 進捗バー */
+  .progress-wrap {
+    padding: 10px 16px 6px;
+    background: #fff8f3;
+    border-bottom: 1px solid #f0ddd0;
+  }
+  .progress-info {
+    display: flex; justify-content: space-between;
+    font-size: 0.78rem; margin-bottom: 4px; color: #9a7060;
+  }
+  .progress-bar {
+    height: 8px; background: #f0ddd0;
+    border-radius: 8px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #c9957a, #e8b99a);
+    border-radius: 8px;
+    transition: width 0.4s ease;
+  }
+
+  /* メインリスト */
+  main { max-width: 680px; margin: 16px auto; padding: 0 12px; }
+
+  /* 空メッセージ */
+  .empty-msg {
+    text-align: center; color: #b09080;
+    padding: 40px 20px; font-size: 0.9rem; line-height: 1.8;
+  }
+
+  /* 日付グループ */
+  .day-group { margin-bottom: 12px; }
+  .day-label {
+    font-size: 0.78rem; font-weight: bold;
+    color: #9a7060; margin-bottom: 6px;
+    padding-left: 4px; letter-spacing: 0.04em;
+  }
+  .day-label .weekday { font-weight: normal; margin-left: 4px; color: #b09080; }
+  .day-label .weekday.sat { color: #4488cc; }
+  .day-label .weekday.sun { color: #cc4444; }
+
+  /* タスクカード */
+  .task-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 1px 6px rgba(180,120,90,0.1);
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .task-row {
+    display: flex; align-items: center; gap: 12px;
+    min-height: 56px; padding: 12px 14px;
+    cursor: pointer; user-select: none;
+    touch-action: manipulation;
+  }
+  .task-row:active { background: #fffaf7; }
+
+  .task-row input[type="checkbox"] {
+    width: 26px; height: 26px;
+    accent-color: #c9957a;
+    cursor: pointer; flex-shrink: 0;
+  }
+
+  .task-cat-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-income  { background: #e08030; }
+  .dot-card    { background: #4080d0; }
+  .dot-fixed   { background: #40a060; }
+  .dot-other   { background: #9050c0; }
+
+  .task-info { flex: 1; }
+  .task-name {
+    font-size: 0.95rem; line-height: 1.4;
+    transition: color 0.2s, text-decoration 0.2s;
+  }
+  .task-sub {
+    font-size: 0.72rem; color: #b09080; margin-top: 2px;
+  }
+
+  .task-row.done .task-name {
+    text-decoration: line-through; color: #c0a898;
+  }
+  .task-row.done { background: #fdfaf8; }
+
+  /* カテゴリラベル（右端） */
+  .cat-badge {
+    font-size: 0.65rem; padding: 2px 7px;
+    border-radius: 10px; white-space: nowrap; flex-shrink: 0;
+  }
+  .badge-income { background: #fff0e0; color: #c07030; }
+  .badge-card   { background: #e8f0ff; color: #3060b0; }
+  .badge-fixed  { background: #e8fff0; color: #307050; }
+  .badge-other  { background: #f0e8ff; color: #7040b0; }
+
+  /* ─── 設定パネル ─── */
+  .overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.45);
+  }
+  .overlay.open { display: flex; align-items: flex-end; }
+
+  .setting-panel {
+    background: #fdf6f0;
+    width: 100%; max-height: 90vh;
+    border-radius: 20px 20px 0 0;
+    overflow-y: auto;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .setting-panel header {
+    background: none;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 18px 12px;
+    border-bottom: 1px solid #f0ddd0;
+    padding-top: 18px;
+  }
+  .setting-panel header h2 { font-size: 1rem; color: #4a3728; }
+  .btn-close {
+    background: #f0ddd0; border: none; color: #7a5c4a;
+    width: 32px; height: 32px; border-radius: 50%;
+    font-size: 1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .setting-list { padding: 12px 16px; }
+  .setting-item {
+    background: white; border-radius: 12px;
+    margin-bottom: 8px; padding: 12px 14px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 1px 4px rgba(180,120,90,0.08);
+  }
+  .setting-item .s-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .setting-item .s-name {
+    flex: 1; font-size: 0.9rem; line-height: 1.3;
+  }
+  .setting-item .s-name input[type="text"] {
+    width: 100%; border: none; background: none;
+    font-size: 0.9rem; color: #4a3728;
+    font-family: inherit; outline: none;
+  }
+  .day-input-wrap {
+    display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+  }
+  .day-input-wrap input[type="number"] {
+    width: 46px; text-align: center;
+    border: 1px solid #e0c8b8; border-radius: 8px;
+    padding: 6px 4px; font-size: 0.9rem; color: #4a3728;
+    font-family: inherit;
+  }
+  .day-input-wrap span { font-size: 0.82rem; color: #9a7060; }
+  .btn-del {
+    background: none; border: none; color: #c09080;
+    font-size: 1.2rem; cursor: pointer; padding: 4px;
+    flex-shrink: 0; touch-action: manipulation;
+  }
+  .btn-del:active { color: #a04030; }
+
+  .cat-select {
+    border: 1px solid #e0c8b8; border-radius: 8px;
+    padding: 5px 6px; font-size: 0.8rem; color: #4a3728;
+    background: white; font-family: inherit; flex-shrink: 0;
+  }
+
+  .btn-add-task {
+    width: 100%; padding: 13px;
+    background: white; border: 1.5px dashed #d0a888;
+    border-radius: 12px; color: #a07050;
+    font-size: 0.88rem; cursor: pointer;
+    margin-top: 4px; touch-action: manipulation;
+  }
+  .btn-add-task:active { background: #fff5ee; }
+
+  .setting-save-area { padding: 12px 16px 16px; }
+  .btn-save {
+    width: 100%; padding: 14px;
+    background: #c9957a; color: white; border: none;
+    border-radius: 12px; font-size: 1rem;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .btn-save:active { background: #a07050; }
+
+  /* バックアップ（端末間の引き継ぎ） */
+  .backup-area {
+    margin: 0 16px 20px; padding: 14px;
+    background: #fff8f3; border: 1px solid #f0ddd0;
+    border-radius: 12px;
+  }
+  .backup-title { font-size: 0.9rem; font-weight: bold; color: #8a5c3a; }
+  .backup-desc { font-size: 0.74rem; color: #a08070; margin: 4px 0 10px; line-height: 1.55; }
+  .btn-backup {
+    width: 100%; padding: 11px; margin-bottom: 8px;
+    background: white; border: 1px solid #d0a888;
+    border-radius: 10px; color: #8a5c3a;
+    font-size: 0.88rem; cursor: pointer;
+    touch-action: manipulation; font-family: inherit;
+  }
+  .btn-backup:last-child { margin-bottom: 0; }
+  .btn-backup:active { background: #fff0e8; }
+
+  /* リセット */
+  .reset-area { text-align: center; padding: 8px 0 4px; }
+  .btn-reset {
+    background: none; border: 1px solid #d0b0a0;
+    color: #a07050; padding: 9px 24px;
+    border-radius: 20px; font-size: 0.82rem;
+    cursor: pointer; touch-action: manipulation; min-height: 40px;
+  }
+  .btn-reset:active { background: #fff0e8; }
+
+  @media (min-width: 480px) {
+    .overlay { align-items: center; }
+    .setting-panel {
+      max-width: 480px; margin: auto;
+      border-radius: 20px; max-height: 85vh;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧵 副業管理チェックリスト</h1>
+</header>
+
+<div class="month-nav">
+  <div class="nav-side">
+    <button id="prevBtn">‹</button>
+    <button id="nextBtn">›</button>
+  </div>
+  <div class="month-label" id="monthLabel"></div>
+  <button class="btn-setting" id="openSetting">⚙</button>
+</div>
+
+<div class="progress-wrap">
+  <div class="progress-info">
+    <span id="progressText">0 / 0 件完了</span>
+    <span id="progressPercent">0%</span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+</div>
+
+<main id="mainContent"></main>
+
+<!-- 設定パネル -->
+<div class="overlay" id="overlay">
+  <div class="setting-panel">
+    <header>
+      <h2>⚙ 項目を編集</h2>
+      <button class="btn-close" id="closeSetting">✕</button>
+    </header>
+    <div class="setting-list" id="settingList"></div>
+    <div style="padding:0 16px">
+      <button class="btn-add-task" id="addTaskBtn">＋ 項目を追加する</button>
+    </div>
+    <div class="setting-save-area">
+      <button class="btn-save" id="saveBtn">保存する</button>
+    </div>
+    <div class="backup-area">
+      <div class="backup-title">📦 データの引き継ぎ</div>
+      <p class="backup-desc">スマホ・パソコンなど別の端末へ設定とチェックを移せます。「書き出し」で保存したファイルを、移したい端末で「読み込み」してください。</p>
+      <button class="btn-backup" id="exportBtn">💾 書き出し（バックアップ保存）</button>
+      <button class="btn-backup" id="importBtn">📂 読み込み（復元）</button>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== カテゴリ定義 =====
+const CATS = {
+  income: { label: "売上・入金",       dot: "dot-income", badge: "badge-income" },
+  card:   { label: "クレジットカード", dot: "dot-card",   badge: "badge-card"   },
+  fixed:  { label: "固定費",           dot: "dot-fixed",  badge: "badge-fixed"  },
+  other:  { label: "その他",           dot: "dot-other",  badge: "badge-other"  },
+};
+
+const WEEKDAYS = ["日","月","火","水","木","金","土"];
+const CAT_ORDER = ["income","card","fixed","other"];
+
+// ===== デフォルト項目 =====
+const DEFAULT_TASKS = [
+  { id:"t1", name:"使用明細ダウンロード（クレカ）", cat:"card",   day:10 },
+  { id:"t2", name:"領収証ダウンロード",             cat:"income", day:10 },
+  { id:"t3", name:"売上金の振込確認",               cat:"income", day:15 },
+  { id:"t4", name:"クレジットカード引き落とし確認", cat:"card",   day:27 },
+  { id:"t5", name:"電気代の引き落とし確認",         cat:"fixed",  day:28 },
+  { id:"t6", name:"家賃（按分）の引き落とし確認",   cat:"fixed",  day:27 },
+  { id:"t7", name:"今月の収支を帳簿に記録する",     cat:"other",  day:31 },
+];
+
+// ===== 状態 =====
+const today = new Date();
+let currentYear  = today.getFullYear();
+let currentMonth = today.getMonth() + 1;
+
+function loadTasks() {
+  try {
+    const raw = localStorage.getItem("副業タスク設定");
+    return raw ? JSON.parse(raw) : DEFAULT_TASKS.map(t => ({...t}));
+  } catch { return DEFAULT_TASKS.map(t => ({...t})); }
+}
+function saveTasks(tasks) {
+  localStorage.setItem("副業タスク設定", JSON.stringify(tasks));
+}
+
+function checkKey(y, m) { return `副業チェック_${y}_${String(m).padStart(2,"0")}`; }
+function loadCheck(y, m) {
+  try { const r = localStorage.getItem(checkKey(y,m)); return r ? JSON.parse(r) : {}; }
+  catch { return {}; }
+}
+function saveCheck(y, m, obj) { localStorage.setItem(checkKey(y,m), JSON.stringify(obj)); }
+
+// ===== 実際の日数に合わせる =====
+function realDay(y, m, day) {
+  const lastDay = new Date(y, m, 0).getDate(); // 月末日
+  return Math.min(day, lastDay);
+}
+
+// ===== メイン描画 =====
+function render() {
+  const y = currentYear, mo = currentMonth;
+  const tasks = loadTasks();
+  const checked = loadCheck(y, mo);
+
+  document.getElementById("monthLabel").textContent = `${y}年 ${mo}月`;
+
+  // 進捗
+  const total = tasks.length;
+  const done  = tasks.filter(t => checked[t.id]).length;
+  const pct   = total === 0 ? 0 : Math.round(done / total * 100);
+  document.getElementById("progressText").textContent    = `${done} / ${total} 件完了`;
+  document.getElementById("progressPercent").textContent = `${pct}%`;
+  document.getElementById("progressFill").style.width    = pct + "%";
+
+  const main = document.getElementById("mainContent");
+  main.innerHTML = "";
+
+  if (tasks.length === 0) {
+    main.innerHTML = `<div class="empty-msg">項目がありません。<br>右上の「⚙ 項目を編集」から追加してください。</div>`;
+    return;
+  }
+
+  // 日付順に並べる（同じ日は入力順）
+  const sorted = [...tasks].sort((a, b) => realDay(y, mo, a.day) - realDay(y, mo, b.day));
+
+  // 日付ごとにグループ化
+  const groups = {};
+  sorted.forEach(t => {
+    const d = realDay(y, mo, t.day);
+    if (!groups[d]) groups[d] = [];
+    groups[d].push(t);
+  });
+
+  Object.keys(groups).sort((a,b)=>+a-+b).forEach(day => {
+    const date = new Date(y, mo - 1, +day);
+    const w = date.getDay();
+    const wLabel = WEEKDAYS[w];
+    const wClass = w === 0 ? "sun" : w === 6 ? "sat" : "";
+
+    const group = document.createElement("div");
+    group.className = "day-group";
+
+    const label = document.createElement("div");
+    label.className = "day-label";
+    label.innerHTML = `${day}日 <span class="weekday ${wClass}">${wLabel}曜日</span>`;
+    group.appendChild(label);
+
+    groups[day].forEach(task => {
+      const isDone = !!checked[task.id];
+      const cat = CATS[task.cat] || CATS.other;
+
+      const card = document.createElement("div");
+      card.className = "task-card";
+
+      const row = document.createElement("label");
+      row.className = "task-row" + (isDone ? " done" : "");
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = isDone;
+      cb.addEventListener("change", () => {
+        const c = loadCheck(y, mo);
+        if (cb.checked) c[task.id] = true; else delete c[task.id];
+        saveCheck(y, mo, c);
+        render();
+      });
+
+      const dot = document.createElement("div");
+      dot.className = `task-cat-dot ${cat.dot}`;
+
+      const info = document.createElement("div");
+      info.className = "task-info";
+      info.innerHTML = `<div class="task-name">${escHtml(task.name)}</div>`;
+
+      const badge = document.createElement("div");
+      badge.className = `cat-badge ${cat.badge}`;
+      badge.textContent = cat.label;
+
+      row.append(cb, dot, info, badge);
+      card.appendChild(row);
+      group.appendChild(card);
+    });
+
+    main.appendChild(group);
+  });
+
+  // リセット
+  const ra = document.createElement("div");
+  ra.className = "reset-area";
+  const rb = document.createElement("button");
+  rb.className = "btn-reset";
+  rb.textContent = "この月のチェックをすべてリセット";
+  rb.addEventListener("click", () => {
+    if (confirm(`${y}年${mo}月のチェックをすべて外しますか？`)) {
+      saveCheck(y, mo, {});
+      render();
+    }
+  });
+  ra.appendChild(rb);
+  main.appendChild(ra);
+}
+
+// ===== 設定パネル =====
+let editingTasks = [];
+
+function openSetting() {
+  editingTasks = loadTasks().map(t => ({...t}));
+  editingTasks.sort((a, b) => a.day - b.day);
+  renderSettingList();
+  document.getElementById("overlay").classList.add("open");
+}
+function closeSetting() {
+  document.getElementById("overlay").classList.remove("open");
+}
+
+function renderSettingList() {
+  const list = document.getElementById("settingList");
+  list.innerHTML = "";
+
+  editingTasks.forEach((task, idx) => {
+    const cat = CATS[task.cat] || CATS.other;
+    const item = document.createElement("div");
+    item.className = "setting-item";
+
+    const dot = document.createElement("div");
+    dot.className = `s-dot ${cat.dot}`;
+
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "s-name";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = task.name;
+    nameInput.placeholder = "項目名";
+    nameInput.addEventListener("input", e => { editingTasks[idx].name = e.target.value; });
+    nameWrap.appendChild(nameInput);
+
+    const catSel = document.createElement("select");
+    catSel.className = "cat-select";
+    CAT_ORDER.forEach(k => {
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = CATS[k].label;
+      if (k === task.cat) opt.selected = true;
+      catSel.appendChild(opt);
+    });
+    catSel.addEventListener("change", e => {
+      editingTasks[idx].cat = e.target.value;
+      const newDot = `s-dot ${(CATS[e.target.value]||CATS.other).dot}`;
+      dot.className = newDot;
+    });
+
+    const dayWrap = document.createElement("div");
+    dayWrap.className = "day-input-wrap";
+    const dayInput = document.createElement("input");
+    dayInput.type = "number";
+    dayInput.min = 1; dayInput.max = 31;
+    dayInput.value = task.day;
+    dayInput.addEventListener("change", e => {
+      let v = parseInt(e.target.value) || 1;
+      v = Math.max(1, Math.min(31, v));
+      editingTasks[idx].day = v;
+      e.target.value = v;
+    });
+    const dayUnit = document.createElement("span");
+    dayUnit.textContent = "日";
+    dayWrap.append(dayInput, dayUnit);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "btn-del";
+    delBtn.textContent = "×";
+    delBtn.title = "削除";
+    delBtn.addEventListener("click", () => {
+      if (confirm(`「${task.name}」を削除しますか？`)) {
+        editingTasks.splice(idx, 1);
+        renderSettingList();
+      }
+    });
+
+    item.append(dot, nameWrap, catSel, dayWrap, delBtn);
+    list.appendChild(item);
+  });
+}
+
+function addTask() {
+  const newId = "u" + Date.now();
+  editingTasks.push({ id: newId, name: "", cat: "other", day: 1 });
+  renderSettingList();
+  // 最後の入力欄にフォーカス
+  setTimeout(() => {
+    const inputs = document.querySelectorAll(".s-name input");
+    if (inputs.length) inputs[inputs.length-1].focus();
+  }, 50);
+}
+
+function saveSettings() {
+  // 名前が空のものは除外して日付順に並び替え
+  const valid = editingTasks
+    .filter(t => t.name.trim() !== "")
+    .sort((a, b) => a.day - b.day);
+  saveTasks(valid);
+  closeSetting();
+  render();
+}
+
+// ===== ユーティリティ =====
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ===== イベント =====
+document.getElementById("prevBtn").addEventListener("click", () => {
+  currentMonth--;
+  if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+  render();
+});
+document.getElementById("nextBtn").addEventListener("click", () => {
+  currentMonth++;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  render();
+});
+document.getElementById("openSetting").addEventListener("click", openSetting);
+document.getElementById("closeSetting").addEventListener("click", closeSetting);
+document.getElementById("addTaskBtn").addEventListener("click", addTask);
+document.getElementById("saveBtn").addEventListener("click", saveSettings);
+document.getElementById("overlay").addEventListener("click", e => {
+  if (e.target === document.getElementById("overlay")) closeSetting();
+});
+
+// ===== バックアップ（書き出し・読み込み） =====
+function exportData() {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf("副業") === 0) data[k] = localStorage.getItem(k);
+  }
+  if (Object.keys(data).length === 0) {
+    alert("保存するデータがまだありません。");
+    return;
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const d = new Date();
+  const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  a.href = url;
+  a.download = `副業管理バックアップ_${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const keys = Object.keys(data).filter(k => k.indexOf("副業") === 0);
+      if (keys.length === 0) {
+        alert("このファイルには引き継ぎできるデータが見つかりませんでした。");
+        return;
+      }
+      if (!confirm(`${keys.length}件のデータを読み込みます。\n今この端末にあるデータは上書きされます。よろしいですか？`)) return;
+      keys.forEach(k => localStorage.setItem(k, data[k]));
+      alert("読み込みが完了しました！");
+      closeSetting();
+      render();
+    } catch (err) {
+      alert("ファイルを読み込めませんでした。正しいバックアップファイルか確認してください。");
+    }
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById("exportBtn").addEventListener("click", exportData);
+document.getElementById("importBtn").addEventListener("click", () => {
+  document.getElementById("importFile").click();
+});
+document.getElementById("importFile").addEventListener("change", e => {
+  if (e.target.files && e.target.files[0]) importData(e.target.files[0]);
+  e.target.value = "";
+});
+
+render();
+</script>
+</body>
+</html>
