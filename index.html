@@ -194,8 +194,17 @@
   .setting-item {
     background: white; border-radius: 12px;
     margin-bottom: 8px; padding: 12px 14px;
-    display: flex; align-items: center; gap: 10px;
     box-shadow: 0 1px 4px rgba(180,120,90,0.08);
+  }
+  .s-top {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .s-bottom {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 10px; flex-wrap: wrap;
+  }
+  .s-bottom .s-fld-label {
+    font-size: 0.72rem; color: #b09080;
   }
   .setting-item .s-dot {
     width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
@@ -401,9 +410,12 @@ function render() {
 
   document.getElementById("monthLabel").textContent = `${y}年 ${mo}月`;
 
+  // 今月に表示する項目だけにしぼる（毎月 or 今月が指定された毎年項目）
+  const applicable = tasks.filter(t => !t.month || t.month === mo);
+
   // 進捗
-  const total = tasks.length;
-  const done  = tasks.filter(t => checked[t.id]).length;
+  const total = applicable.length;
+  const done  = applicable.filter(t => checked[t.id]).length;
   const pct   = total === 0 ? 0 : Math.round(done / total * 100);
   document.getElementById("progressText").textContent    = `${done} / ${total} 件完了`;
   document.getElementById("progressPercent").textContent = `${pct}%`;
@@ -413,12 +425,16 @@ function render() {
   main.innerHTML = "";
 
   if (tasks.length === 0) {
-    main.innerHTML = `<div class="empty-msg">項目がありません。<br>右上の「⚙ 項目を編集」から追加してください。</div>`;
+    main.innerHTML = `<div class="empty-msg">項目がありません。<br>右上の「⚙」から追加してください。</div>`;
+    return;
+  }
+  if (applicable.length === 0) {
+    main.innerHTML = `<div class="empty-msg">${mo}月に予定された項目はありません。<br>毎月の項目や、毎年${mo}月の項目を入れるとここに表示されます。</div>`;
     return;
   }
 
   // 日付順に並べる（同じ日は入力順）
-  const sorted = [...tasks].sort((a, b) => realDay(y, mo, a.day) - realDay(y, mo, b.day));
+  const sorted = [...applicable].sort((a, b) => realDay(y, mo, a.day) - realDay(y, mo, b.day));
 
   // 日付ごとにグループ化
   const groups = {};
@@ -467,7 +483,8 @@ function render() {
 
       const info = document.createElement("div");
       info.className = "task-info";
-      info.innerHTML = `<div class="task-name">${escHtml(task.name)}</div>`;
+      const sub = task.month ? `<div class="task-sub">📌 毎年${task.month}月のみ</div>` : "";
+      info.innerHTML = `<div class="task-name">${escHtml(task.name)}</div>${sub}`;
 
       const badge = document.createElement("div");
       badge.className = `cat-badge ${cat.badge}`;
@@ -546,6 +563,25 @@ function renderSettingList() {
       dot.className = newDot;
     });
 
+    // 頻度（毎月 / 毎年◯月だけ）
+    const freqSel = document.createElement("select");
+    freqSel.className = "cat-select";
+    const optEvery = document.createElement("option");
+    optEvery.value = "0";
+    optEvery.textContent = "毎月";
+    if (!task.month) optEvery.selected = true;
+    freqSel.appendChild(optEvery);
+    for (let mm = 1; mm <= 12; mm++) {
+      const opt = document.createElement("option");
+      opt.value = String(mm);
+      opt.textContent = `毎年${mm}月`;
+      if (task.month === mm) opt.selected = true;
+      freqSel.appendChild(opt);
+    }
+    freqSel.addEventListener("change", e => {
+      editingTasks[idx].month = parseInt(e.target.value, 10); // 0=毎月
+    });
+
     const dayWrap = document.createElement("div");
     dayWrap.className = "day-input-wrap";
     const dayInput = document.createElement("input");
@@ -573,14 +609,22 @@ function renderSettingList() {
       }
     });
 
-    item.append(dot, nameWrap, catSel, dayWrap, delBtn);
+    const top = document.createElement("div");
+    top.className = "s-top";
+    top.append(dot, nameWrap, delBtn);
+
+    const bottom = document.createElement("div");
+    bottom.className = "s-bottom";
+    bottom.append(catSel, freqSel, dayWrap);
+
+    item.append(top, bottom);
     list.appendChild(item);
   });
 }
 
 function addTask() {
   const newId = "u" + Date.now();
-  editingTasks.push({ id: newId, name: "", cat: "other", day: 1 });
+  editingTasks.push({ id: newId, name: "", cat: "other", day: 1, month: 0 });
   renderSettingList();
   // 最後の入力欄にフォーカス
   setTimeout(() => {
