@@ -319,6 +319,11 @@
   }
   .btn-backup:last-child { margin-bottom: 0; }
   .btn-backup:active { background: #fff0e8; }
+  .sync-status {
+    font-size: 0.74rem; color: #8a7060;
+    margin-top: 8px; text-align: center; min-height: 1em;
+    line-height: 1.4;
+  }
 
   /* リセット */
   .reset-area { text-align: center; padding: 8px 0 4px; }
@@ -381,9 +386,10 @@
       <button class="btn-save" id="saveBtn">保存する</button>
     </div>
     <div class="backup-area">
-      <div class="backup-title">🔄 変更を全端末に反映</div>
-      <p class="backup-desc">項目を追加・変更したら、このボタンで「data.json」を書き出して送ってください。反映後は、スマホもパソコンも開くだけで自動的に最新の項目になります（読み込み操作は不要です）。</p>
-      <button class="btn-backup" id="updateBtn">🔄 更新（変更を書き出す）</button>
+      <div class="backup-title">🔄 自動同期（Googleドライブ）</div>
+      <p class="backup-desc">項目を「保存する」と、自動でクラウドに送られ、ほかの端末でも開くだけで最新になります。うまく反映されないときは下のボタンで手動で送れます。</p>
+      <button class="btn-backup" id="updateBtn">🔄 今すぐ同期する</button>
+      <div id="syncStatus" class="sync-status"></div>
     </div>
   </div>
 </div>
@@ -763,6 +769,7 @@ function saveSettings() {
     })
     .sort((a, b) => a.day - b.day);
   saveTasks(valid);
+  pushToServer(valid);   // 保存したら自動でクラウドへ送る（全端末に反映）
   closeSetting();
   render();
 }
@@ -791,55 +798,70 @@ document.getElementById("overlay").addEventListener("click", e => {
   if (e.target === document.getElementById("overlay")) closeSetting();
 });
 
-// ===== 自動同期（開くたびに最新を読み込む） =====
+// ===== 自動同期（Googleドライブと同期） =====
+const SYNC_URL = "https://script.google.com/macros/s/AKfycbyHN6VKkPJFLmWyh2XLkooJUTZt0Hhf5bXg4clNHrFJQqJV1nJ4pduc3ICTNlUxUWmF/exec";
 const MASTER_VER_KEY = "副業マスター版数";
+const syncStatusEl = document.getElementById("syncStatus");
 
+function setSyncStatus(text) {
+  if (syncStatusEl) syncStatusEl.textContent = text;
+}
+function nowTime() {
+  return new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+}
+
+// 開いたとき：サーバーが新しければ自動で取り込む
 async function syncFromServer() {
   try {
-    const res = await fetch("data.json?t=" + Date.now(), { cache: "no-store" });
+    const res = await fetch(SYNC_URL + "?t=" + Date.now(), { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
     if (!data || !Array.isArray(data.tasks)) return;
     const localVer = parseInt(localStorage.getItem(MASTER_VER_KEY) || "0", 10);
     const serverVer = data.version || 0;
-    // サーバー側が新しいときだけ自動で取り込む
-    if (serverVer > localVer) {
+    // サーバーが新しく、かつ中身があるときだけ取り込む
+    if (serverVer > localVer && data.tasks.length > 0) {
       saveTasks(data.tasks);
       localStorage.setItem(MASTER_VER_KEY, String(serverVer));
       render();
+      setSyncStatus("✓ 最新の内容を読み込みました（" + nowTime() + "）");
     }
   } catch (e) {
     // オフラインなどは無視（手元のデータで表示を続ける）
   }
 }
 
-// ===== 更新（変更を書き出して全端末に反映依頼） =====
-function publishUpdate() {
-  const tasks = loadTasks();
-  if (tasks.length === 0) {
-    alert("項目がありません。先に項目を追加してください。");
-    return;
-  }
+// 保存したとき：サーバーへ送る（全端末に反映）
+function pushToServer(tasks) {
+  if (!tasks || tasks.length === 0) return;
   const version = Date.now();
   const payload = { version: version, tasks: tasks };
-  // この端末を最新扱いにする（自分の変更が上書きされないように）
-  saveTasks(tasks);
   localStorage.setItem(MASTER_VER_KEY, String(version));
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "data.json";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  alert("「data.json」を書き出しました。\nこのファイルを送って反映を依頼してください。\n反映後は、どの端末も開くだけで自動的に最新になります。");
+  setSyncStatus("送信中…");
+  try {
+    fetch(SYNC_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    }).then(() => {
+      setSyncStatus("✓ 同期しました（" + nowTime() + "）");
+    }).catch(() => {
+      setSyncStatus("⚠ 送信できませんでした。電波の良い所で「今すぐ同期」を押してください。");
+    });
+  } catch (e) {
+    setSyncStatus("⚠ 送信できませんでした。");
+  }
 }
 
-document.getElementById("updateBtn").addEventListener("click", publishUpdate);
+// 「今すぐ同期」ボタン：今この端末の内容をサーバーへ送る
+function manualSync() {
+  const tasks = loadTasks();
+  if (tasks.length === 0) { alert("項目がありません。"); return; }
+  pushToServer(tasks);
+}
+
+document.getElementById("updateBtn").addEventListener("click", manualSync);
 
 render();
 syncFromServer();
