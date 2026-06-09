@@ -160,6 +160,30 @@
   .badge-fixed  { background: #e8fff0; color: #307050; }
   .badge-other  { background: #f0e8ff; color: #7040b0; }
 
+  /* 件数（手順の進み具合） */
+  .sub-count {
+    font-size: 0.72rem; color: #b58a6a;
+    background: #fff3ea; border-radius: 8px;
+    padding: 1px 7px; margin-left: 4px; white-space: nowrap;
+  }
+
+  /* 子チェック（手順） */
+  .sub-list {
+    padding: 2px 14px 10px 52px;
+    border-top: 1px dashed #f2e6dd;
+  }
+  .sub-row {
+    display: flex; align-items: center; gap: 12px;
+    min-height: 42px; padding: 6px 0;
+    cursor: pointer; user-select: none; touch-action: manipulation;
+  }
+  .sub-row input[type="checkbox"] {
+    width: 22px; height: 22px;
+    accent-color: #c9957a; flex-shrink: 0; cursor: pointer;
+  }
+  .sub-name { font-size: 0.88rem; color: #5a4636; line-height: 1.4; }
+  .sub-row.done .sub-name { text-decoration: line-through; color: #bba898; }
+
   /* ─── 設定パネル ─── */
   .overlay {
     display: none;
@@ -238,6 +262,26 @@
     border: 1px solid #e0c8b8; border-radius: 8px;
     padding: 5px 6px; font-size: 0.8rem; color: #4a3728;
     background: white; font-family: inherit; flex-shrink: 0;
+  }
+
+  /* 手順（子チェック）の編集 */
+  .sub-edit {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px dashed #f0ddd0;
+  }
+  .sub-edit-title { font-size: 0.72rem; color: #a08070; margin-bottom: 6px; }
+  .sub-edit-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  }
+  .sub-edit-row input[type="text"] {
+    flex: 1; border: 1px solid #e0c8b8; border-radius: 8px;
+    padding: 7px 9px; font-size: 0.85rem; color: #4a3728;
+    font-family: inherit; outline: none;
+  }
+  .btn-add-sub {
+    background: none; border: none; color: #a07050;
+    font-size: 0.8rem; cursor: pointer; padding: 4px 0;
+    touch-action: manipulation;
   }
 
   .btn-add-task {
@@ -459,7 +503,10 @@ function render() {
     group.appendChild(label);
 
     groups[day].forEach(task => {
-      const isDone = !!checked[task.id];
+      const subs = Array.isArray(task.subs) ? task.subs : [];
+      const hasSubs = subs.length > 0;
+      const subCount = subs.filter(s => checked[s.id]).length;
+      const isDone = hasSubs ? (subCount === subs.length) : !!checked[task.id];
       const cat = CATS[task.cat] || CATS.other;
 
       const card = document.createElement("div");
@@ -473,7 +520,12 @@ function render() {
       cb.checked = isDone;
       cb.addEventListener("change", () => {
         const c = loadCheck(y, mo);
-        if (cb.checked) c[task.id] = true; else delete c[task.id];
+        if (hasSubs) {
+          // 親を操作したら、中の手順すべてに反映
+          subs.forEach(s => { if (cb.checked) c[s.id] = true; else delete c[s.id]; });
+        } else {
+          if (cb.checked) c[task.id] = true; else delete c[task.id];
+        }
         saveCheck(y, mo, c);
         render();
       });
@@ -483,8 +535,9 @@ function render() {
 
       const info = document.createElement("div");
       info.className = "task-info";
-      const sub = task.month ? `<div class="task-sub">📌 毎年${task.month}月のみ</div>` : "";
-      info.innerHTML = `<div class="task-name">${escHtml(task.name)}</div>${sub}`;
+      const countTxt = hasSubs ? ` <span class="sub-count">${subCount}/${subs.length}</span>` : "";
+      const ynote = task.month ? `<div class="task-sub">📌 毎年${task.month}月のみ</div>` : "";
+      info.innerHTML = `<div class="task-name">${escHtml(task.name)}${countTxt}</div>${ynote}`;
 
       const badge = document.createElement("div");
       badge.className = `cat-badge ${cat.badge}`;
@@ -492,6 +545,33 @@ function render() {
 
       row.append(cb, dot, info, badge);
       card.appendChild(row);
+
+      // 子チェック（手順）
+      if (hasSubs) {
+        const subList = document.createElement("div");
+        subList.className = "sub-list";
+        subs.forEach(s => {
+          const sdone = !!checked[s.id];
+          const srow = document.createElement("label");
+          srow.className = "sub-row" + (sdone ? " done" : "");
+          const scb = document.createElement("input");
+          scb.type = "checkbox";
+          scb.checked = sdone;
+          scb.addEventListener("change", () => {
+            const c = loadCheck(y, mo);
+            if (scb.checked) c[s.id] = true; else delete c[s.id];
+            saveCheck(y, mo, c);
+            render();
+          });
+          const sname = document.createElement("div");
+          sname.className = "sub-name";
+          sname.textContent = s.name;
+          srow.append(scb, sname);
+          subList.appendChild(srow);
+        });
+        card.appendChild(subList);
+      }
+
       group.appendChild(card);
     });
 
@@ -617,7 +697,45 @@ function renderSettingList() {
     bottom.className = "s-bottom";
     bottom.append(catSel, freqSel, dayWrap);
 
-    item.append(top, bottom);
+    // 手順（子チェック）の編集
+    if (!Array.isArray(editingTasks[idx].subs)) editingTasks[idx].subs = [];
+    const subEdit = document.createElement("div");
+    subEdit.className = "sub-edit";
+    const subTitle = document.createElement("div");
+    subTitle.className = "sub-edit-title";
+    subTitle.textContent = "手順（チェックを分けたいとき）";
+    subEdit.appendChild(subTitle);
+
+    editingTasks[idx].subs.forEach((s, sidx) => {
+      const sr = document.createElement("div");
+      sr.className = "sub-edit-row";
+      const si = document.createElement("input");
+      si.type = "text";
+      si.value = s.name;
+      si.placeholder = "手順名（例：明細ダウンロード）";
+      si.addEventListener("input", e => { editingTasks[idx].subs[sidx].name = e.target.value; });
+      const sd = document.createElement("button");
+      sd.className = "btn-del";
+      sd.textContent = "×";
+      sd.title = "削除";
+      sd.addEventListener("click", () => {
+        editingTasks[idx].subs.splice(sidx, 1);
+        renderSettingList();
+      });
+      sr.append(si, sd);
+      subEdit.appendChild(sr);
+    });
+
+    const addSub = document.createElement("button");
+    addSub.className = "btn-add-sub";
+    addSub.textContent = "＋ 手順を追加";
+    addSub.addEventListener("click", () => {
+      editingTasks[idx].subs.push({ id: "s" + Date.now() + Math.floor(Math.random()*1000), name: "" });
+      renderSettingList();
+    });
+    subEdit.appendChild(addSub);
+
+    item.append(top, bottom, subEdit);
     list.appendChild(item);
   });
 }
@@ -634,9 +752,15 @@ function addTask() {
 }
 
 function saveSettings() {
-  // 名前が空のものは除外して日付順に並び替え
+  // 名前が空のものは除外、手順の空欄も除外、日付順に並び替え
   const valid = editingTasks
     .filter(t => t.name.trim() !== "")
+    .map(t => {
+      const subs = Array.isArray(t.subs)
+        ? t.subs.filter(s => s.name.trim() !== "")
+        : [];
+      return { ...t, subs };
+    })
     .sort((a, b) => a.day - b.day);
   saveTasks(valid);
   closeSetting();
