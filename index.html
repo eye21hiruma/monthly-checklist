@@ -387,7 +387,7 @@
     </div>
     <div class="backup-area">
       <div class="backup-title">🔄 自動同期（Googleドライブ）</div>
-      <p class="backup-desc">項目を「保存する」と、自動でクラウドに送られ、ほかの端末でも開くだけで最新になります。うまく反映されないときは下のボタンで手動で送れます。</p>
+      <p class="backup-desc">項目もチェック（☑）も、変更すると自動でクラウドに送られ、ほかの端末でも開くだけで最新になります。うまく反映されないときは下のボタンで手動で送れます。</p>
       <button class="btn-backup" id="updateBtn">🔄 今すぐ同期する</button>
       <div id="syncStatus" class="sync-status"></div>
     </div>
@@ -533,6 +533,7 @@ function render() {
           if (cb.checked) c[task.id] = true; else delete c[task.id];
         }
         saveCheck(y, mo, c);
+        pushState();
         render();
       });
 
@@ -567,6 +568,7 @@ function render() {
             const c = loadCheck(y, mo);
             if (scb.checked) c[s.id] = true; else delete c[s.id];
             saveCheck(y, mo, c);
+            pushState();
             render();
           });
           const sname = document.createElement("div");
@@ -593,6 +595,7 @@ function render() {
   rb.addEventListener("click", () => {
     if (confirm(`${y}年${mo}月のチェックをすべて外しますか？`)) {
       saveCheck(y, mo, {});
+      pushState();
       render();
     }
   });
@@ -769,7 +772,7 @@ function saveSettings() {
     })
     .sort((a, b) => a.day - b.day);
   saveTasks(valid);
-  pushToServer(valid);   // 保存したら自動でクラウドへ送る（全端末に反映）
+  pushState();   // 保存したら自動でクラウドへ送る（全端末に反映）
   closeSetting();
   render();
 }
@@ -798,10 +801,11 @@ document.getElementById("overlay").addEventListener("click", e => {
   if (e.target === document.getElementById("overlay")) closeSetting();
 });
 
-// ===== 自動同期（Googleドライブと同期） =====
+// ===== 自動同期（Googleドライブと同期：項目＋チェック） =====
 const SYNC_URL = "https://script.google.com/macros/s/AKfycbyHN6VKkPJFLmWyh2XLkooJUTZt0Hhf5bXg4clNHrFJQqJV1nJ4pduc3ICTNlUxUWmF/exec";
 const MASTER_VER_KEY = "副業マスター版数";
 const syncStatusEl = document.getElementById("syncStatus");
+let isApplyingRemote = false;
 
 function setSyncStatus(text) {
   if (syncStatusEl) syncStatusEl.textContent = text;
@@ -810,33 +814,55 @@ function nowTime() {
   return new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
 }
 
-// 開いたとき：サーバーが新しければ自動で取り込む
+// すべての月のチェックを1つにまとめる
+function gatherChecks() {
+  const checks = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf("副業チェック_") === 0) {
+      try { checks[k.replace("副業チェック_", "")] = JSON.parse(localStorage.getItem(k) || "{}"); }
+      catch (e) {}
+    }
+  }
+  return checks;
+}
+function applyChecks(checks) {
+  if (!checks || typeof checks !== "object") return;
+  Object.keys(checks).forEach(mk => {
+    localStorage.setItem("副業チェック_" + mk, JSON.stringify(checks[mk] || {}));
+  });
+}
+
+// 開いたとき・戻ってきたとき：サーバーが新しければ取り込む
 async function syncFromServer() {
   try {
     const res = await fetch(SYNC_URL + "?t=" + Date.now(), { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
-    if (!data || !Array.isArray(data.tasks)) return;
+    if (!data) return;
     const localVer = parseInt(localStorage.getItem(MASTER_VER_KEY) || "0", 10);
     const serverVer = data.version || 0;
-    // サーバーが新しく、かつ中身があるときだけ取り込む
-    if (serverVer > localVer && data.tasks.length > 0) {
-      saveTasks(data.tasks);
+    // サーバーが新しいときだけ取り込む
+    if (serverVer > localVer && serverVer > 0) {
+      isApplyingRemote = true;
+      if (Array.isArray(data.tasks) && data.tasks.length > 0) saveTasks(data.tasks);
+      if (data.checks) applyChecks(data.checks);
       localStorage.setItem(MASTER_VER_KEY, String(serverVer));
+      isApplyingRemote = false;
       render();
-      setSyncStatus("✓ 最新の内容を読み込みました（" + nowTime() + "）");
+      setSyncStatus("✓ 最新の状態にしました（" + nowTime() + "）");
     }
   } catch (e) {
-    // オフラインなどは無視（手元のデータで表示を続ける）
+    // オフラインなどは無視
   }
 }
 
-// 保存したとき：サーバーへ送る（全端末に反映）
-function pushToServer(tasks) {
-  if (!tasks || tasks.length === 0) return;
+// 変更したとき：今の全状態（項目＋チェック）をサーバーへ送る
+function pushState() {
+  if (isApplyingRemote) return; // 取り込み中は送らない
   const version = Date.now();
-  const payload = { version: version, tasks: tasks };
   localStorage.setItem(MASTER_VER_KEY, String(version));
+  const payload = { version: version, tasks: loadTasks(), checks: gatherChecks() };
   setSyncStatus("送信中…");
   try {
     fetch(SYNC_URL, {
@@ -854,14 +880,17 @@ function pushToServer(tasks) {
   }
 }
 
-// 「今すぐ同期」ボタン：今この端末の内容をサーバーへ送る
+// 「今すぐ同期」ボタン
 function manualSync() {
-  const tasks = loadTasks();
-  if (tasks.length === 0) { alert("項目がありません。"); return; }
-  pushToServer(tasks);
+  pushState();
 }
 
 document.getElementById("updateBtn").addEventListener("click", manualSync);
+
+// 画面に戻ってきたら最新を取りに行く
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) syncFromServer();
+});
 
 render();
 syncFromServer();
