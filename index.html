@@ -284,6 +284,19 @@
     touch-action: manipulation;
   }
 
+  /* 手順の並び替えハンドル */
+  .drag-handle {
+    color: #c0a090; font-size: 1.15rem; line-height: 1;
+    padding: 2px 8px 2px 0; cursor: grab; flex-shrink: 0;
+    user-select: none; -webkit-user-select: none; touch-action: none;
+  }
+  .drag-handle:active { cursor: grabbing; }
+  .sub-edit-row.dragging { opacity: 0.3; }
+  .sub-edit-row.drop-target {
+    border-top: 2px solid #c9957a;
+    margin-top: -2px;
+  }
+
   .btn-add-task {
     width: 100%; padding: 13px;
     background: white; border: 1.5px dashed #d0a888;
@@ -715,9 +728,19 @@ function renderSettingList() {
     subTitle.textContent = "手順（チェックを分けたいとき）";
     subEdit.appendChild(subTitle);
 
+    let dragSrcSidx = null;
+
     editingTasks[idx].subs.forEach((s, sidx) => {
       const sr = document.createElement("div");
       sr.className = "sub-edit-row";
+      sr.dataset.sidx = sidx;
+
+      // ドラッグハンドル
+      const handle = document.createElement("div");
+      handle.className = "drag-handle";
+      handle.textContent = "⠿";
+      handle.title = "長押し or ドラッグで並び替え";
+
       const si = document.createElement("input");
       si.type = "text";
       si.value = s.name;
@@ -731,8 +754,83 @@ function renderSettingList() {
         editingTasks[idx].subs.splice(sidx, 1);
         renderSettingList();
       });
-      sr.append(si, sd);
+
+      // ── デスクトップ: HTML5 ドラッグ ──
+      sr.draggable = true;
+      sr.addEventListener("dragstart", e => {
+        dragSrcSidx = sidx;
+        e.dataTransfer.effectAllowed = "move";
+        requestAnimationFrame(() => sr.classList.add("dragging"));
+      });
+      sr.addEventListener("dragend", () => {
+        sr.classList.remove("dragging");
+        subEdit.querySelectorAll(".sub-edit-row").forEach(r => r.classList.remove("drop-target"));
+        dragSrcSidx = null;
+      });
+      sr.addEventListener("dragover", e => {
+        e.preventDefault();
+        if (dragSrcSidx !== null && dragSrcSidx !== sidx) {
+          subEdit.querySelectorAll(".sub-edit-row").forEach(r => r.classList.remove("drop-target"));
+          sr.classList.add("drop-target");
+        }
+      });
+      sr.addEventListener("drop", e => {
+        e.preventDefault();
+        sr.classList.remove("drop-target");
+        if (dragSrcSidx !== null && dragSrcSidx !== sidx) {
+          const subs = editingTasks[idx].subs;
+          const [moved] = subs.splice(dragSrcSidx, 1);
+          const insertAt = sidx > dragSrcSidx ? sidx - 1 : sidx;
+          subs.splice(insertAt, 0, moved);
+          renderSettingList();
+        }
+      });
+
+      // ── モバイル: タッチ開始（ハンドルのみ） ──
+      handle.addEventListener("touchstart", e => {
+        e.preventDefault();
+        dragSrcSidx = sidx;
+        sr.classList.add("dragging");
+      }, { passive: false });
+
+      sr.append(handle, si, sd);
       subEdit.appendChild(sr);
+    });
+
+    // ── モバイル: タッチ移動・終了（コンテナで検知） ──
+    subEdit.addEventListener("touchmove", e => {
+      if (dragSrcSidx === null) return;
+      e.preventDefault();
+      const y = e.touches[0].clientY;
+      const rows = [...subEdit.querySelectorAll(".sub-edit-row:not(.dragging)")];
+      rows.forEach(r => r.classList.remove("drop-target"));
+      const target = rows.find(r => {
+        const rect = r.getBoundingClientRect();
+        return y >= rect.top && y <= rect.bottom;
+      });
+      if (target) target.classList.add("drop-target");
+    }, { passive: false });
+
+    subEdit.addEventListener("touchend", e => {
+      if (dragSrcSidx === null) return;
+      const y = e.changedTouches[0].clientY;
+      const rows = [...subEdit.querySelectorAll(".sub-edit-row:not(.dragging)")];
+      rows.forEach(r => r.classList.remove("drop-target"));
+      const target = rows.find(r => {
+        const rect = r.getBoundingClientRect();
+        return y >= rect.top && y <= rect.bottom;
+      });
+      if (target) {
+        const tSidx = parseInt(target.dataset.sidx);
+        if (!isNaN(tSidx) && tSidx !== dragSrcSidx) {
+          const subs = editingTasks[idx].subs;
+          const [moved] = subs.splice(dragSrcSidx, 1);
+          const insertAt = tSidx > dragSrcSidx ? tSidx - 1 : tSidx;
+          subs.splice(insertAt, 0, moved);
+        }
+      }
+      dragSrcSidx = null;
+      renderSettingList();
     });
 
     const addSub = document.createElement("button");
