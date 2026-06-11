@@ -396,12 +396,7 @@
       <button class="btn-add-task" id="addTaskBtn">＋ 項目を追加する</button>
     </div>
     <div class="setting-save-area">
-      <button class="btn-save" id="saveBtn">保存する</button>
-    </div>
-    <div class="backup-area">
-      <div class="backup-title">🔄 自動同期（Googleドライブ）</div>
-      <p class="backup-desc">項目もチェック（☑）も、変更すると自動でクラウドに送られ、ほかの端末でも開くだけで最新になります。うまく反映されないときは下のボタンで手動で送れます。</p>
-      <button class="btn-backup" id="updateBtn">🔄 今すぐ同期する</button>
+      <button class="btn-save" id="saveBtn">保存して同期する</button>
       <div id="syncStatus" class="sync-status"></div>
     </div>
   </div>
@@ -982,8 +977,6 @@ function pushState() {
 function manualSync() {
   pushState();
 }
-
-document.getElementById("updateBtn").addEventListener("click", manualSync);
 
 // 画面に戻ってきたら最新を取りに行く
 document.addEventListener("visibilitychange", () => {
