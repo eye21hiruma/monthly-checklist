@@ -482,9 +482,13 @@ function render() {
     return true;                               // 毎月
   });
 
-  // 進捗
+  // 進捗（手順がある項目は、手順がすべて済んだら完了とみなす）
   const total = applicable.length;
-  const done  = applicable.filter(t => checked[t.id]).length;
+  const done  = applicable.filter(t => {
+    const subs = Array.isArray(t.subs) ? t.subs : [];
+    if (subs.length > 0) return subs.every(s => checked[s.id]);
+    return !!checked[t.id];
+  }).length;
   const pct   = total === 0 ? 0 : Math.round(done / total * 100);
   document.getElementById("progressText").textContent    = `${done} / ${total} 件完了`;
   document.getElementById("progressPercent").textContent = `${pct}%`;
