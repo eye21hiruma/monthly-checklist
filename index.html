@@ -354,16 +354,6 @@
   }
   .btn-main-sync:active { background: #a07050; }
 
-  /* リセット */
-  .reset-area { text-align: center; padding: 8px 0 4px; }
-  .btn-reset {
-    background: none; border: 1px solid #d0b0a0;
-    color: #a07050; padding: 9px 24px;
-    border-radius: 20px; font-size: 0.82rem;
-    cursor: pointer; touch-action: manipulation; min-height: 40px;
-  }
-  .btn-reset:active { background: #fff0e8; }
-
   @media (min-width: 480px) {
     .overlay { align-items: center; }
     .setting-panel {
@@ -630,22 +620,6 @@ function render() {
   sStat.className = "sync-status";
   sa.append(sbtn, sStat);
   main.appendChild(sa);
-
-  // リセット
-  const ra = document.createElement("div");
-  ra.className = "reset-area";
-  const rb = document.createElement("button");
-  rb.className = "btn-reset";
-  rb.textContent = "この月のチェックをすべてリセット";
-  rb.addEventListener("click", () => {
-    if (confirm(`${y}年${mo}月のチェックをすべて外しますか？`)) {
-      saveCheck(y, mo, {});
-      pushState();
-      render();
-    }
-  });
-  ra.appendChild(rb);
-  main.appendChild(ra);
 }
 
 // ===== 設定パネル =====
