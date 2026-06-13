@@ -343,6 +343,17 @@
     line-height: 1.4;
   }
 
+  /* メイン画面の保存して同期する */
+  .main-sync-area { text-align: center; padding: 14px 0 4px; }
+  .btn-main-sync {
+    width: 100%; max-width: 320px; padding: 13px;
+    background: #c9957a; color: white; border: none;
+    border-radius: 12px; font-size: 0.95rem;
+    cursor: pointer; touch-action: manipulation;
+    font-family: inherit;
+  }
+  .btn-main-sync:active { background: #a07050; }
+
   /* リセット */
   .reset-area { text-align: center; padding: 8px 0 4px; }
   .btn-reset {
@@ -605,6 +616,20 @@ function render() {
 
     main.appendChild(group);
   });
+
+  // 保存して同期する
+  const sa = document.createElement("div");
+  sa.className = "main-sync-area";
+  const sbtn = document.createElement("button");
+  sbtn.className = "btn-main-sync";
+  sbtn.textContent = "🔄 保存して同期する";
+  sbtn.addEventListener("click", () => {
+    pushState();
+  });
+  const sStat = document.createElement("div");
+  sStat.className = "sync-status";
+  sa.append(sbtn, sStat);
+  main.appendChild(sa);
 
   // リセット
   const ra = document.createElement("div");
@@ -931,11 +956,11 @@ document.getElementById("overlay").addEventListener("click", e => {
 // ===== 自動同期（Googleドライブと同期：項目＋チェック） =====
 const SYNC_URL = "https://script.google.com/macros/s/AKfycbyHN6VKkPJFLmWyh2XLkooJUTZt0Hhf5bXg4clNHrFJQqJV1nJ4pduc3ICTNlUxUWmF/exec";
 const MASTER_VER_KEY = "副業マスター版数";
-const syncStatusEl = document.getElementById("syncStatus");
 let isApplyingRemote = false;
 
 function setSyncStatus(text) {
-  if (syncStatusEl) syncStatusEl.textContent = text;
+  // 設定パネルとメイン画面、両方のステータス表示を更新
+  document.querySelectorAll(".sync-status").forEach(el => { el.textContent = text; });
 }
 function nowTime() {
   return new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
