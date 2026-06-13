@@ -468,8 +468,13 @@ function render() {
 
   document.getElementById("monthLabel").textContent = `${y}年 ${mo}月`;
 
-  // 今月に表示する項目だけにしぼる（毎月 or 今月が指定された毎年項目）
-  const applicable = tasks.filter(t => !t.month || t.month === mo);
+  // 今月に表示する項目だけにしぼる（毎月 / 毎年◯月 / 今月のみ）
+  const thisYM = `${y}-${String(mo).padStart(2,"0")}`;
+  const applicable = tasks.filter(t => {
+    if (t.onceYM) return t.onceYM === thisYM; // 今月のみ：指定の年月だけ
+    if (t.month) return t.month === mo;        // 毎年◯月
+    return true;                               // 毎月
+  });
 
   // 進捗
   const total = applicable.length;
@@ -551,7 +556,9 @@ function render() {
       const info = document.createElement("div");
       info.className = "task-info";
       const countTxt = hasSubs ? ` <span class="sub-count">${subCount}/${subs.length}</span>` : "";
-      const ynote = task.month ? `<div class="task-sub">📌 毎年${task.month}月のみ</div>` : "";
+      const ynote = task.onceYM
+        ? `<div class="task-sub">📌 今月のみ</div>`
+        : (task.month ? `<div class="task-sub">📌 毎年${task.month}月のみ</div>` : "");
       info.innerHTML = `<div class="task-name">${escHtml(task.name)}${countTxt}</div>${ynote}`;
 
       const badge = document.createElement("div");
@@ -660,23 +667,37 @@ function renderSettingList() {
       dot.className = newDot;
     });
 
-    // 頻度（毎月 / 毎年◯月だけ）
+    // 頻度（毎月 / 毎年◯月だけ / 今月のみ）
     const freqSel = document.createElement("select");
     freqSel.className = "cat-select";
     const optEvery = document.createElement("option");
     optEvery.value = "0";
     optEvery.textContent = "毎月";
-    if (!task.month) optEvery.selected = true;
+    if (!task.month && !task.onceYM) optEvery.selected = true;
     freqSel.appendChild(optEvery);
+    // 今月のみ（今表示している月だけ）
+    const optOnce = document.createElement("option");
+    optOnce.value = "once";
+    optOnce.textContent = `今月（${currentYear}年${currentMonth}月）のみ`;
+    if (task.onceYM) optOnce.selected = true;
+    freqSel.appendChild(optOnce);
     for (let mm = 1; mm <= 12; mm++) {
       const opt = document.createElement("option");
       opt.value = String(mm);
       opt.textContent = `毎年${mm}月`;
-      if (task.month === mm) opt.selected = true;
+      if (!task.onceYM && task.month === mm) opt.selected = true;
       freqSel.appendChild(opt);
     }
     freqSel.addEventListener("change", e => {
-      editingTasks[idx].month = parseInt(e.target.value, 10); // 0=毎月
+      const v = e.target.value;
+      if (v === "once") {
+        // 今表示している月だけに表示する
+        editingTasks[idx].onceYM = `${currentYear}-${String(currentMonth).padStart(2,"0")}`;
+        editingTasks[idx].month = 0;
+      } else {
+        delete editingTasks[idx].onceYM;
+        editingTasks[idx].month = parseInt(v, 10); // 0=毎月
+      }
     });
 
     const dayWrap = document.createElement("div");
