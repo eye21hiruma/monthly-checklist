@@ -251,6 +251,11 @@
     font-family: inherit;
   }
   .day-input-wrap span { font-size: 0.82rem; color: #9a7060; }
+  .eom-note {
+    flex-basis: 100%; font-size: 0.7rem; color: #b58a6a;
+    margin-top: 2px;
+  }
+  .eom-note:empty { display: none; }
   .btn-del {
     background: none; border: none; color: #c09080;
     font-size: 1.2rem; cursor: pointer; padding: 4px;
@@ -706,14 +711,22 @@ function renderSettingList() {
     dayInput.type = "number";
     dayInput.min = 1; dayInput.max = 31;
     dayInput.value = task.day;
+    const dayUnit = document.createElement("span");
+    dayUnit.textContent = "日";
+    // 月末に自動調整される注意書き（29〜31日のとき表示）
+    const eomNote = document.createElement("div");
+    eomNote.className = "eom-note";
+    function updateEomNote(v) {
+      eomNote.textContent = v >= 29 ? "※短い月は自動で月末に調整されます" : "";
+    }
+    updateEomNote(task.day);
     dayInput.addEventListener("change", e => {
       let v = parseInt(e.target.value) || 1;
       v = Math.max(1, Math.min(31, v));
       editingTasks[idx].day = v;
       e.target.value = v;
+      updateEomNote(v);
     });
-    const dayUnit = document.createElement("span");
-    dayUnit.textContent = "日";
     dayWrap.append(dayInput, dayUnit);
 
     const delBtn = document.createElement("button");
@@ -733,7 +746,7 @@ function renderSettingList() {
 
     const bottom = document.createElement("div");
     bottom.className = "s-bottom";
-    bottom.append(catSel, freqSel, dayWrap);
+    bottom.append(catSel, freqSel, dayWrap, eomNote);
 
     // 手順（子チェック）の編集
     if (!Array.isArray(editingTasks[idx].subs)) editingTasks[idx].subs = [];
