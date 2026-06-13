@@ -343,6 +343,44 @@
     line-height: 1.4;
   }
 
+  /* 今月はお休みボタン */
+  .skip-bar {
+    display: flex; justify-content: flex-end;
+    padding: 0 12px 8px;
+  }
+  .btn-skip {
+    background: none; border: none; color: #b59a8a;
+    font-size: 0.74rem; cursor: pointer; padding: 4px 6px;
+    touch-action: manipulation; font-family: inherit;
+  }
+  .btn-skip:active { color: #8a6a55; }
+
+  /* お休み中の項目 */
+  .rest-group {
+    margin: 18px 0 8px; padding: 12px 14px;
+    background: #f6efe9; border-radius: 12px;
+  }
+  .rest-title {
+    font-size: 0.8rem; color: #9a7060; font-weight: bold;
+    margin-bottom: 8px;
+  }
+  .rest-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0; border-top: 1px dashed #e6d8cd;
+  }
+  .rest-name {
+    flex: 1; font-size: 0.85rem; color: #a08a7a;
+    line-height: 1.4;
+  }
+  .btn-back {
+    background: white; border: 1px solid #d0a888;
+    color: #8a5c3a; font-size: 0.78rem;
+    padding: 5px 14px; border-radius: 16px;
+    cursor: pointer; touch-action: manipulation;
+    flex-shrink: 0; font-family: inherit;
+  }
+  .btn-back:active { background: #fff0e8; }
+
   /* メイン画面の保存して同期する */
   .main-sync-area { text-align: center; padding: 14px 0 4px; }
   .btn-main-sync {
@@ -482,9 +520,14 @@ function render() {
     return true;                               // 毎月
   });
 
-  // 進捗（手順がある項目は、手順がすべて済んだら完了とみなす）
-  const total = applicable.length;
-  const done  = applicable.filter(t => {
+  // 今月お休み（不要）にした項目を分ける
+  const isSkipped = t => checked["__skip__" + t.id] === true;
+  const visible = applicable.filter(t => !isSkipped(t));
+  const skippedTasks = applicable.filter(isSkipped);
+
+  // 進捗（手順がある項目は、手順がすべて済んだら完了とみなす。お休み項目は数えない）
+  const total = visible.length;
+  const done  = visible.filter(t => {
     const subs = Array.isArray(t.subs) ? t.subs : [];
     if (subs.length > 0) return subs.every(s => checked[s.id]);
     return !!checked[t.id];
@@ -506,8 +549,8 @@ function render() {
     return;
   }
 
-  // 日付順に並べる（同じ日は入力順）
-  const sorted = [...applicable].sort((a, b) => realDay(y, mo, a.day) - realDay(y, mo, b.day));
+  // 日付順に並べる（同じ日は入力順）。お休み項目は除く
+  const sorted = [...visible].sort((a, b) => realDay(y, mo, a.day) - realDay(y, mo, b.day));
 
   // 日付ごとにグループ化
   const groups = {};
@@ -605,11 +648,60 @@ function render() {
         card.appendChild(subList);
       }
 
+      // 今月はお休み（不要）にするボタン
+      const skipBar = document.createElement("div");
+      skipBar.className = "skip-bar";
+      const skipBtn = document.createElement("button");
+      skipBtn.className = "btn-skip";
+      skipBtn.textContent = "💤 今月は不要";
+      skipBtn.title = "この月だけ非表示にします（削除はしません）";
+      skipBtn.addEventListener("click", () => {
+        const c = loadCheck(y, mo);
+        c["__skip__" + task.id] = true;
+        saveCheck(y, mo, c);
+        pushState();
+        render();
+      });
+      skipBar.appendChild(skipBtn);
+      card.appendChild(skipBar);
+
       group.appendChild(card);
     });
 
     main.appendChild(group);
   });
+
+  // 今月お休み中の項目
+  if (skippedTasks.length > 0) {
+    const restGroup = document.createElement("div");
+    restGroup.className = "rest-group";
+    const restTitle = document.createElement("div");
+    restTitle.className = "rest-title";
+    restTitle.textContent = `💤 今月はお休み中（${skippedTasks.length}件）`;
+    restGroup.appendChild(restTitle);
+
+    skippedTasks.forEach(task => {
+      const rrow = document.createElement("div");
+      rrow.className = "rest-row";
+      const rname = document.createElement("div");
+      rname.className = "rest-name";
+      rname.textContent = task.name;
+      const backBtn = document.createElement("button");
+      backBtn.className = "btn-back";
+      backBtn.textContent = "戻す";
+      backBtn.addEventListener("click", () => {
+        const c = loadCheck(y, mo);
+        delete c["__skip__" + task.id];
+        saveCheck(y, mo, c);
+        pushState();
+        render();
+      });
+      rrow.append(rname, backBtn);
+      restGroup.appendChild(rrow);
+    });
+
+    main.appendChild(restGroup);
+  }
 
   // 保存して同期する
   const sa = document.createElement("div");
