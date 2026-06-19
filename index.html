@@ -135,6 +135,12 @@
   .dot-card    { background: #4080d0; }
   .dot-fixed   { background: #40a060; }
   .dot-other   { background: #9050c0; }
+  /* 支払い経路 */
+  .dot-bizcard     { background: #4080d0; }
+  .dot-rakutencard { background: #d04040; }
+  .dot-bizbank     { background: #40a060; }
+  .dot-rakutenbank { background: #d06090; }
+  .dot-cash        { background: #c79a52; }
 
   .task-info { flex: 1; }
   .task-name {
@@ -159,6 +165,12 @@
   .badge-card   { background: #e8f0ff; color: #3060b0; }
   .badge-fixed  { background: #e8fff0; color: #307050; }
   .badge-other  { background: #f0e8ff; color: #7040b0; }
+  /* 支払い経路 */
+  .badge-bizcard     { background: #e8f0ff; color: #3060b0; }
+  .badge-rakutencard { background: #ffe8e8; color: #b03030; }
+  .badge-bizbank     { background: #e8fff0; color: #307050; }
+  .badge-rakutenbank { background: #ffe8f2; color: #b04070; }
+  .badge-cash        { background: #fbf2df; color: #97712a; }
 
   /* 件数（手順の進み具合） */
   .sub-count {
@@ -471,6 +483,13 @@
 <script>
 // ===== カテゴリ定義 =====
 const CATS = {
+  // 支払い経路
+  bizcard:     { label: "事業用カード",   dot: "dot-bizcard",     badge: "badge-bizcard"     },
+  rakutencard: { label: "楽天カード",     dot: "dot-rakutencard", badge: "badge-rakutencard" },
+  bizbank:     { label: "事業用口座",     dot: "dot-bizbank",     badge: "badge-bizbank"     },
+  rakutenbank: { label: "楽天銀行口座",   dot: "dot-rakutenbank", badge: "badge-rakutenbank" },
+  cash:        { label: "現金",           dot: "dot-cash",        badge: "badge-cash"        },
+  // 旧カテゴリ（過去に登録した項目を表示するため残してあります）
   income: { label: "売上・入金",       dot: "dot-income", badge: "badge-income" },
   card:   { label: "クレジットカード", dot: "dot-card",   badge: "badge-card"   },
   fixed:  { label: "固定費",           dot: "dot-fixed",  badge: "badge-fixed"  },
@@ -478,7 +497,7 @@ const CATS = {
 };
 
 const WEEKDAYS = ["日","月","火","水","木","金","土"];
-const CAT_ORDER = ["income","card","fixed","other"];
+const CAT_ORDER = ["bizcard","rakutencard","bizbank","rakutenbank","cash"];
 
 // ===== デフォルト項目 =====
 const DEFAULT_TASKS = [
@@ -784,6 +803,14 @@ function renderSettingList() {
 
     const catSel = document.createElement("select");
     catSel.className = "cat-select";
+    // 旧カテゴリの項目は、今の値を「（旧）」付きで先頭に出して見えるようにする
+    if (!CAT_ORDER.includes(task.cat) && CATS[task.cat]) {
+      const oldOpt = document.createElement("option");
+      oldOpt.value = task.cat;
+      oldOpt.textContent = "（旧）" + CATS[task.cat].label;
+      oldOpt.selected = true;
+      catSel.appendChild(oldOpt);
+    }
     CAT_ORDER.forEach(k => {
       const opt = document.createElement("option");
       opt.value = k;
@@ -1017,7 +1044,7 @@ function renderSettingList() {
 
 function addTask() {
   const newId = "u" + Date.now();
-  editingTasks.push({ id: newId, name: "", cat: "other", day: 1, month: 0 });
+  editingTasks.push({ id: newId, name: "", cat: "bizcard", day: 1, month: 0 });
   renderSettingList();
   // 最後の入力欄にフォーカス
   setTimeout(() => {
