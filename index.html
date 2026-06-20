@@ -243,7 +243,17 @@
   }
   .s-top {
     display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
   }
+  .btn-chevron {
+    background: none; border: none; color: #b08868;
+    font-size: 0.8rem; cursor: pointer; padding: 4px;
+    width: 24px; flex-shrink: 0; touch-action: manipulation;
+    line-height: 1;
+  }
+  /* 開閉する中身 */
+  .item-body { margin-top: 0; }
+  .item-body.collapsed { display: none; }
   .s-bottom {
     display: flex; align-items: center; gap: 8px;
     margin-top: 10px; flex-wrap: wrap;
@@ -809,10 +819,12 @@ function render() {
 
 // ===== 設定パネル =====
 let editingTasks = [];
+let expandedIds = new Set(); // 開いている項目のid
 
 function openSetting() {
   editingTasks = loadTasks().map(t => ({...t}));
   editingTasks.sort((a, b) => a.day - b.day);
+  expandedIds = new Set(); // 最初はすべて閉じる
   renderSettingList();
   document.getElementById("overlay").classList.add("open");
 }
@@ -945,9 +957,13 @@ function renderSettingList() {
       }
     });
 
+    // 開閉用の▸▾ボタン
+    const chevron = document.createElement("button");
+    chevron.className = "btn-chevron";
+
     const top = document.createElement("div");
     top.className = "s-top";
-    top.append(dot, nameWrap, delBtn);
+    top.append(chevron, dot, nameWrap, delBtn);
 
     const bottom = document.createElement("div");
     bottom.className = "s-bottom";
@@ -1122,7 +1138,31 @@ function renderSettingList() {
     });
     subEdit.appendChild(addSub);
 
-    item.append(top, bottom, applyWrap, noteWrap, subEdit);
+    // 開閉する中身をまとめる
+    const body = document.createElement("div");
+    body.className = "item-body";
+    body.append(bottom, applyWrap, noteWrap, subEdit);
+
+    // 開閉の状態を反映する
+    function applyExpanded() {
+      const open = expandedIds.has(task.id);
+      body.classList.toggle("collapsed", !open);
+      chevron.textContent = open ? "▾" : "▸";
+    }
+    applyExpanded();
+    function toggleExpanded() {
+      if (expandedIds.has(task.id)) expandedIds.delete(task.id);
+      else expandedIds.add(task.id);
+      applyExpanded();
+    }
+    chevron.addEventListener("click", toggleExpanded);
+    // 見出し部分（名前入力・削除ボタン以外）をタップしても開閉できる
+    top.addEventListener("click", e => {
+      if (e.target === nameInput || e.target === delBtn || e.target === chevron) return;
+      toggleExpanded();
+    });
+
+    item.append(top, body);
     list.appendChild(item);
   });
 }
@@ -1130,6 +1170,7 @@ function renderSettingList() {
 function addTask() {
   const newId = "u" + Date.now();
   editingTasks.push({ id: newId, name: "", cat: "bizcard", day: 1, month: 0 });
+  expandedIds.add(newId); // 追加した項目は開いた状態にする
   renderSettingList();
   // 最後の入力欄にフォーカス
   setTimeout(() => {
