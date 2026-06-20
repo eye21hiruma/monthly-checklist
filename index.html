@@ -290,6 +290,23 @@
     background: white; font-family: inherit; flex-shrink: 0;
   }
 
+  /* 適用範囲（経路・メモの変更範囲） */
+  .apply-edit {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px dashed #f0ddd0;
+  }
+  .apply-edit-label { font-size: 0.72rem; color: #a08070; margin-bottom: 6px; }
+  .apply-opts { display: flex; flex-direction: column; gap: 6px; }
+  .apply-opt {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 0.8rem; color: #5a4636; line-height: 1.4;
+    cursor: pointer;
+  }
+  .apply-opt input[type="radio"] {
+    width: 18px; height: 18px; accent-color: #c9957a;
+    flex-shrink: 0; margin-top: 1px; cursor: pointer;
+  }
+
   /* 仕訳メモ（編集欄） */
   .note-edit {
     margin-top: 10px; padding-top: 10px;
@@ -532,6 +549,27 @@ function saveTasks(tasks) {
   localStorage.setItem("副業タスク設定", JSON.stringify(tasks));
 }
 
+// ===== 効力日（いつから有効か）を扱う仕組み =====
+// 経路やメモは「基本値」＋「◯月から変えた履歴（log）」で管理する。
+// これにより、過去の月をさかのぼって変えずに、途中から変更できる。
+function ymStr(y, m) { return `${y}-${String(m).padStart(2,"0")}`; }
+function effVal(baseline, log, y, m) {
+  const ym = ymStr(y, m);
+  let best = null;
+  if (Array.isArray(log)) log.forEach(e => {
+    if (e.from <= ym && (!best || e.from > best.from)) best = e;
+  });
+  return best ? best.val : baseline;
+}
+function setLog(task, logKey, y, m, val) {
+  const ym = ymStr(y, m);
+  if (!Array.isArray(task[logKey])) task[logKey] = [];
+  const ex = task[logKey].find(e => e.from === ym);
+  if (ex) ex.val = val;
+  else task[logKey].push({ from: ym, val: val });
+  task[logKey].sort((a, b) => a.from < b.from ? -1 : 1);
+}
+
 function checkKey(y, m) { return `副業チェック_${y}_${String(m).padStart(2,"0")}`; }
 function loadCheck(y, m) {
   try { const r = localStorage.getItem(checkKey(y,m)); return r ? JSON.parse(r) : {}; }
@@ -620,7 +658,8 @@ function render() {
       const hasSubs = subs.length > 0;
       const subCount = subs.filter(s => checked[s.id]).length;
       const isDone = hasSubs ? (subCount === subs.length) : !!checked[task.id];
-      const cat = CATS[task.cat] || CATS.other;
+      const catKey = effVal(task.cat, task.catLog, y, mo); // この月に効いている経路
+      const cat = CATS[catKey] || CATS.other;
 
       const card = document.createElement("div");
       card.className = "task-card";
@@ -663,10 +702,11 @@ function render() {
       card.appendChild(row);
 
       // 仕訳メモ（あれば表示）
-      if (task.note && task.note.trim() !== "") {
+      const noteVal = effVal(task.note, task.noteLog, y, mo); // この月に効いているメモ
+      if (noteVal && noteVal.trim() !== "") {
         const noteEl = document.createElement("div");
         noteEl.className = "task-note";
-        noteEl.textContent = "📝 " + task.note;
+        noteEl.textContent = "📝 " + noteVal;
         card.appendChild(noteEl);
       }
 
@@ -785,9 +825,14 @@ function renderSettingList() {
   list.innerHTML = "";
 
   editingTasks.forEach((task, idx) => {
-    const cat = CATS[task.cat] || CATS.other;
+    // 今ひらいている月に効いている経路を取り出す
+    const curCatKey = effVal(task.cat, task.catLog, currentYear, currentMonth);
+    const cat = CATS[curCatKey] || CATS.other;
     const item = document.createElement("div");
     item.className = "setting-item";
+
+    // この項目の編集中の「適用範囲」：all=すべての月 / from=今の月から
+    let applyMode = "all";
 
     const dot = document.createElement("div");
     dot.className = `s-dot ${cat.dot}`;
@@ -804,10 +849,10 @@ function renderSettingList() {
     const catSel = document.createElement("select");
     catSel.className = "cat-select";
     // 旧カテゴリの項目は、今の値を「（旧）」付きで先頭に出して見えるようにする
-    if (!CAT_ORDER.includes(task.cat) && CATS[task.cat]) {
+    if (!CAT_ORDER.includes(curCatKey) && CATS[curCatKey]) {
       const oldOpt = document.createElement("option");
-      oldOpt.value = task.cat;
-      oldOpt.textContent = "（旧）" + CATS[task.cat].label;
+      oldOpt.value = curCatKey;
+      oldOpt.textContent = "（旧）" + CATS[curCatKey].label;
       oldOpt.selected = true;
       catSel.appendChild(oldOpt);
     }
@@ -815,12 +860,20 @@ function renderSettingList() {
       const opt = document.createElement("option");
       opt.value = k;
       opt.textContent = CATS[k].label;
-      if (k === task.cat) opt.selected = true;
+      if (k === curCatKey) opt.selected = true;
       catSel.appendChild(opt);
     });
     catSel.addEventListener("change", e => {
-      editingTasks[idx].cat = e.target.value;
-      const newDot = `s-dot ${(CATS[e.target.value]||CATS.other).dot}`;
+      const v = e.target.value;
+      if (applyMode === "from") {
+        // 今の月から変更（前の月はそのまま）
+        setLog(editingTasks[idx], "catLog", currentYear, currentMonth, v);
+      } else {
+        // すべての月に適用（基本値を置き換え、履歴は消す）
+        editingTasks[idx].cat = v;
+        editingTasks[idx].catLog = [];
+      }
+      const newDot = `s-dot ${(CATS[v]||CATS.other).dot}`;
       dot.className = newDot;
     });
 
@@ -900,6 +953,31 @@ function renderSettingList() {
     bottom.className = "s-bottom";
     bottom.append(catSel, freqSel, dayWrap, eomNote);
 
+    // 適用範囲（経路・メモの変更を、すべての月にするか／今の月からにするか）
+    const applyWrap = document.createElement("div");
+    applyWrap.className = "apply-edit";
+    const applyLabel = document.createElement("div");
+    applyLabel.className = "apply-edit-label";
+    applyLabel.textContent = "経路・メモを変えたとき、どの月に反映する？";
+    const applyOpts = document.createElement("div");
+    applyOpts.className = "apply-opts";
+    const nm = "apply_" + idx;
+    [["all", "すべての月に反映（付け間違いを直すとき）"],
+     ["from", `${currentYear}年${currentMonth}月から反映（前の月はそのまま）`]
+    ].forEach(([val, text], i) => {
+      const lab = document.createElement("label");
+      lab.className = "apply-opt";
+      const r = document.createElement("input");
+      r.type = "radio"; r.name = nm; r.value = val;
+      if (val === "all") r.checked = true;
+      r.addEventListener("change", () => { if (r.checked) applyMode = val; });
+      const sp = document.createElement("span");
+      sp.textContent = text;
+      lab.append(r, sp);
+      applyOpts.appendChild(lab);
+    });
+    applyWrap.append(applyLabel, applyOpts);
+
     // 仕訳メモ（自由に編集できる。支払い経路が変わったら書き換えられる）
     const noteWrap = document.createElement("div");
     noteWrap.className = "note-edit";
@@ -909,9 +987,16 @@ function renderSettingList() {
     const noteInput = document.createElement("textarea");
     noteInput.className = "note-edit-input";
     noteInput.rows = 2;
-    noteInput.value = task.note || "";
+    noteInput.value = effVal(task.note, task.noteLog, currentYear, currentMonth) || "";
     noteInput.placeholder = "この項目で入力する仕訳を書いておけます";
-    noteInput.addEventListener("input", e => { editingTasks[idx].note = e.target.value; });
+    noteInput.addEventListener("input", e => {
+      if (applyMode === "from") {
+        setLog(editingTasks[idx], "noteLog", currentYear, currentMonth, e.target.value);
+      } else {
+        editingTasks[idx].note = e.target.value;
+        editingTasks[idx].noteLog = [];
+      }
+    });
     noteWrap.append(noteLabel, noteInput);
 
     // 手順（子チェック）の編集
@@ -1037,7 +1122,7 @@ function renderSettingList() {
     });
     subEdit.appendChild(addSub);
 
-    item.append(top, bottom, noteWrap, subEdit);
+    item.append(top, bottom, applyWrap, noteWrap, subEdit);
     list.appendChild(item);
   });
 }
